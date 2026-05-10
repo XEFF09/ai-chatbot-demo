@@ -1,0 +1,100 @@
+services:
+  web:
+    image: xeff09/ai-chatbot-web:latest
+    depends_on:
+      gateway:
+        condition: service_started
+    ports:
+      - "${WEB_PORT}:3030"
+
+  gateway:
+    image: xeff09/ai-chatbot-gateway:latest
+    ports:
+      - "${APP_PORT}:3000"
+    depends_on:
+      db:
+        condition: service_started
+      grpc-server:
+        condition: service_healthy
+    environment:
+      DB_URI: ${DB_URI}
+      DB_HOST: db
+      DB_PORT: 27017
+      DB_DATABASE: ${DB_DATABASE}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      BASE_URL: ${BASE_URL}
+      GRPC_CHAT_URL: grpc-server:50051
+    networks:
+      - ai-network
+
+  grpc-server:
+    image: xeff09/ai-chatbot-chat:latest
+    init: true
+    ports:
+      - "${GRPC_PORT}:50051"
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+      - QDRANT_HOST=qdrant
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      qdrant:
+        condition: service_started
+    command: ["python", "src/app/main.py"]
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import grpc; grpc.aio.secure_channel('localhost:50051', grpc.ssl_channel_credentials())",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - ai-network
+
+  db:
+    image: mongo
+    restart: always
+    ports:
+      - "${DB_PORT}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${DB_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - ai-network
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "${QDRANT_DB_PORT}:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage:z
+    restart: always
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    networks:
+      - ai-network
+
+volumes:
+  mongo-data:
+    driver: local
+  hf_cache:
+  qdrant_data:
+
+networks:
+  ai-network:
+    driver: bridge
