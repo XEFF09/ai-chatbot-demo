@@ -1,0 +1,9 @@
+[submodule "gateway"]
+	path = gateway
+	url = git@github.com:XEFF09/ai-chatbot-gateway.git
+[submodule "k8s"]
+	path = k8s
+	url = git@github.com:XEFF09/ai-chatbot-k8s.git
+[submodule "chat"]
+	path = chat
+	url = git@github.com:XEFF09/ai-chatbot-chat.git
